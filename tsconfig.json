@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "es2018",
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "outDir": "./dist",
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    "lib": ["es2018"],
+	"strict": true,
+  },
+  "include": ["src"],
+  "exclude": [
+    "azure-pipelines-language-server",
+    "node_modules",
+    "dist"
+  ]
+}

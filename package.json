@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "name": "az-pipelines-linter",
+  "description": "A local CLI linter for Azure Pipelines YAML files",
+  "bin": {
+    "az-lint": "./bin/linter.mjs"
+  },
+  "main": "dist/linter.js",
+  "files": [
+    "bin",
+    "dist",
+    "azure-pipelines-language-server/language-server/out",
+    "package.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && npm link",
+    "start": "ts-node src/linter.ts --file tests/azure-pipelines.yml",
+    "prod": "npm run build && node dist/linter.js --file tests/azure-pipelines.yml"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "chalk": "^5.4.1",
+    "vscode-jsonrpc": "^8.2.1"
+  }
+}

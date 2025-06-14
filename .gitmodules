@@ -1,0 +1,3 @@
+[submodule "azure-pipelines-language-server"]
+	path = azure-pipelines-language-server
+	url = https://github.com/microsoft/azure-pipelines-language-server.git
