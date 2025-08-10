@@ -1,85 +1,75 @@
-import { spawn } from "child_process";
-import { readFileSync } from "fs";
-import * as rpc from "vscode-jsonrpc/node";
-import { printOutput } from "./helper";
-import path = require("path");
+import * as fs from 'fs';
+import * as path from 'path';
+import { TextDocument } from 'vscode-languageserver-textdocument';
+import {
+  getLanguageService,
+  LanguageService,
+  LanguageSettings,
+  SchemaRequestService
+} from '../azure-pipelines-language-server/language-service/src/yamlLanguageService';
+import { parse as parseYAML } from '../azure-pipelines-language-server/language-service/src/parser/yamlParser';
+import { printOutput } from './helper';
 
-// Get file to check
-let pipelineFile = "./azure-pipelines.yml"; // Default path to the Azure Pipelines YAML file
-const fileArgIndex = process.argv.indexOf("--file");
-if (fileArgIndex !== -1 && process.argv[fileArgIndex + 1]) {
-  pipelineFile = process.argv[fileArgIndex + 1];
-}
-console.log(`Checking Azure Pipelines YAML file: ${pipelineFile}`);
+// Azure Pipelines schema URI
+const URI = "https://raw.githubusercontent.com/microsoft/azure-pipelines-vscode/main/service-schema.json";
 
-// Launch the Language Server
-const serverPath = path.resolve(__dirname, '../azure-pipelines-language-server/language-server/out/server.js');
-const serverProcess = spawn("node", [
-  serverPath,
-  "--stdio"
-], {
-  stdio: ["pipe", "pipe", "pipe"]
-});
-console.log("Language Server started");
-
-// Start listening
-const connection = rpc.createMessageConnection(
-	new rpc.StreamMessageReader(serverProcess.stdout),
-	new rpc.StreamMessageWriter(serverProcess.stdin)
-);
-connection.listen();
-console.log("Connected to Language Server");
-
-// Log output from Language Server
-let didOutput = false;
-connection.onNotification("textDocument/publishDiagnostics", (params) => {
-  if (params.diagnostics.length > 0) {
-    params.diagnostics.forEach((diagnostic: { severity: any; range: any; message: any; }) => {
-      console.log(printOutput({
-        severity: diagnostic.severity,
-        range: diagnostic.range,
-        message: diagnostic.message
-      }));
-    });
-  } else {
-    console.log("No diagnostics found.");
+// Schema Request Service. We only have one, but this could be extended in the future.
+const schemaRequestService: SchemaRequestService = (uri: string) => {
+  if (!uri || uri === URI) {
+    const schema = fs.readFileSync(path.resolve(__dirname, '../schemas/service-schema.json'), 'utf-8');
+    return Promise.resolve(JSON.parse(schema));
   }
-  didOutput = true;
-});
+  return Promise.reject(`Schema URI not supported: ${uri}`);
+};
 
-// Initialize the connection
-connection.sendRequest("initialize", {
-  processId: process.pid,
-  rootUri: null,
-  capabilities: {}
-}).then(() => {
-  // Send schema association manually
-  connection.sendNotification("json/schemaAssociations", {
-    "azure-pipelines.yml": ["https://raw.githubusercontent.com/microsoft/azure-pipelines-vscode/main/service-schema.json"]
-  });
-  const yamlText = readFileSync(pipelineFile, "utf8");
+// Current Workspace
+const workspaceContext = {
+  resolveRelativePath: (relativePath: string, resource: string) => {
+    return path.resolve(path.dirname(resource), relativePath);
+  }
+};
 
-  connection.sendNotification("textDocument/didOpen", {
-    textDocument: {
-      uri: "file://" + require("path").resolve(pipelineFile),
-      languageId: "yaml",
-      version: 1,
-      text: yamlText
+// Create the language service
+const languageService: LanguageService = getLanguageService(
+  schemaRequestService,
+  [], // no JSON worker contributions
+  (_uri: string) => Promise.resolve(_uri),
+  workspaceContext
+);
+
+// Configure it with Azure Pipelines schema
+const settings: LanguageSettings = {
+  validate: true,
+  schemas: [
+    {
+      uri: URI,
+      fileMatch: ['azure-pipelines.yml', 'azure-pipelines.yaml'],
     }
+  ]
+};
+languageService.configure(settings);
+
+// Load input file and parse
+if (process.argv.length < 3) {
+  console.error('Usage: npx ts-node src/linter.ts --file <path-to-yaml-file>');
+  process.exit(1);
+}
+const filePathIndex = process.argv.indexOf('--file') + 1;
+if (filePathIndex === 0 || filePathIndex >= process.argv.length) {
+  console.error('Error: Please provide a file path after --file');
+  process.exit(1);
+}
+const filePath = process.argv[filePathIndex];
+const content = fs.readFileSync(filePath, 'utf8');
+const document = TextDocument.create(`file://${filePath}`, 'yaml', 0, content);
+const yamlDocs = parseYAML(document.getText());
+
+// Run validation on each document
+yamlDocs.documents.forEach(async (doc) => {
+  const diagnostics = await languageService.doValidation(document, { documents: [doc], errors: [], warnings: [] });
+  diagnostics.forEach(diag => {
+    // const { line, character } = diag.range.start;
+    // console.log(`${filePath}:${line + 1}:${character + 1} - ${diag.message}`);
+    console.log(printOutput(diag));
   });
-  // Close the connection
-  setTimeout(() => {
-      connection.sendNotification("textDocument/didClose", {
-      textDocument: {
-          uri: "file://" + require("path").resolve(pipelineFile)
-      }
-      });
-      serverProcess.kill();
-      // Exit with correct status code
-      if (!didOutput) {
-          console.error("Valid Pipeline: No diagnostics found.");
-      }
-      console.log(`Exiting with status code:" ${didOutput ? 1 : 0}`);
-      process.exit(didOutput ? 1 : 0);
-  }, 1500);
 });

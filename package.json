@@ -13,17 +13,26 @@
     "package.json"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && npm link",
+    "build:service": "cd azure-pipelines-language-server/language-service && npm ci",
+    "build": "npm run build:service && tsc -p tsconfig.json && npm link",
     "start": "ts-node src/linter.ts --file tests/azure-pipelines.yml",
-    "prod": "npm run build && node dist/linter.js --file tests/azure-pipelines.yml"
+    "prod": "npm run build && node dist/linter.js --file tests/azure-pipelines.yml",
+    "lint": "eslint . --config eslint.config.mts",
+    "knip": "knip"
   },
   "devDependencies": {
-    "@types/node": "^24.0.1",
+    "@eslint/js": "^9.33.0",
+    "@types/node": "^24.2.1",
+    "eslint": "^9.33.0",
+    "jiti": "^2.5.1",
+    "knip": "^5.62.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.3"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.39.0",
+    "vscode-languageserver-types": "^3.17.5"
   },
   "dependencies": {
     "chalk": "^5.4.1",
-    "vscode-jsonrpc": "^8.2.1"
+    "vscode-languageserver-textdocument": "^1.0.12"
   }
 }
